@@ -38,5 +38,10 @@ pip install -r requirements.txt
 
 # Install Playwright dependencies
 playwright install
+#Run the code
+open the app.py and run the code 
+#open web
+use http://127.0.0.1:5000/
+to open the webpage
 
 
