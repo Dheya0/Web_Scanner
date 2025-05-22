@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Scanner Pro</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div class="index-container fade-in">
+    <header class="index-header">
+      <h1><i class="fas fa-shield-virus"></i> Security Scanner</h1>
+      <p>Comprehensive Web Security Assessment Platform</p>
+    </header>
+
+    <main class="index-form-container">
+      <form action="{{ url_for('scan_route') }}" method="POST" class="index-scan-form" id="scanForm" onsubmit="return prepareSubmit()">
+        <!-- === Target URL Input === -->
+        <div class="index-input-group">
+          <label for="target_url" class="sr-only">Target URL</label>
+          <input type="url" id="target_url" name="target_url" placeholder="Enter target URL (e.g., https://example.com)" required class="index-input-field" autocomplete="off" pattern="https?://.+" title="Please enter a valid URL starting with http:// or https://">
+        </div>
+
+        <!-- === Scan Configuration Section (Radio Buttons + Basic Checks) === -->
+        <section class="index-scan-options">
+          <h3><i class="fas fa-cog fa-fw"></i> Scan Configuration</h3>
+          <div class="index-scan-type">
+            <div class="index-option-item">
+              <input type="radio" name="scan_type" value="full" id="full_scan" checked>
+              <label for="full_scan" class="index-scan-type-label">
+                <i class="fas fa-shield-alt fa-fw"></i> Full Comprehensive Scan
+                <small>Runs all available security tests.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="radio" name="scan_type" value="custom" id="custom_scan">
+              <label for="custom_scan" class="index-scan-type-label">
+                <i class="fas fa-tasks fa-fw"></i> Custom Scan
+                <small>Select specific security tests.</small>
+              </label>
+            </div>
+          </div>
+
+          <!-- Basic Custom Scan Options (Shown when Custom is selected) -->
+          <div class="index-custom-options" id="customOptionsBasic" style="display: none;">
+            <div class="index-option-group">
+              <h4>Basic Checks</h4>
+              <div class="index-option-item">
+                <input type="checkbox" name="categories" value="https" id="check_https">
+                <label for="check_https"><i class="fas fa-lock fa-fw"></i> HTTPS & SSL/TLS Check
+                  <small>Verify certificate, protocols, HSTS.</small>
+                </label>
+              </div>
+              <div class="index-option-item">
+                <input type="checkbox" name="categories" value="headers" id="check_headers">
+                <label for="check_headers"><i class="fas fa-shield-alt fa-fw"></i> Security Headers
+                  <small>Analyze HTTP security headers.</small>
+                </label>
+              </div>
+              <div class="index-option-item">
+                <input type="checkbox" name="categories" value="cookies" id="check_cookies">
+                <label for="check_cookies"><i class="fas fa-cookie-bite fa-fw"></i> Cookie Security
+                  <small>Check Secure, HttpOnly, SameSite.</small>
+                </label>
+              </div>
+              <div class="index-option-item">
+                <input type="checkbox" name="categories" value="info_disclosure" id="check_info_disclosure">
+                <label for="check_info_disclosure"><i class="fas fa-eye fa-fw"></i> Information Disclosure
+                  <small>Check headers, comments, files.</small>
+                </label>
+              </div>
+              <div class="index-option-item">
+                <input type="checkbox" name="categories" value="waf" id="check_waf">
+                <label for="check_waf"><i class="fas fa-server fa-fw"></i> WAF Detection
+                  <small>Attempt to identify WAF.</small>
+                </label>
+              </div>
+              <div class="index-option-item">
+                <input type="checkbox" name="categories" value="domain_info" id="check_domain">
+                <label for="check_domain"><i class="fas fa-info-circle fa-fw"></i> Domain Information
+                  <small>Check WHOIS, DNS records.</small>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- === Advanced / Vulnerability Scan Options === -->
+        <section class="index-advanced-options" id="advancedOptions" style="display: none;">
+          <hr class="options-divider">
+          <h3><i class="fas fa-bug fa-fw"></i> Advanced Options / Vulnerability Checks</h3>
+          <div class="index-option-group">
+            <h4>Vulnerability Scan Categories</h4>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="sql_injection" id="check_sql_injection">
+              <label for="check_sql_injection"><i class="fas fa-database fa-fw"></i> SQL Injection (SQLi)
+                <small>Test URL parameters.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="cmd_injection" id="check_cmd_injection">
+              <label for="check_cmd_injection"><i class="fas fa-terminal fa-fw"></i> Command Injection
+                <small>Test URL parameters.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="xss" id="check_xss_reflective">
+              <label for="check_xss_reflective"><i class="fas fa-code fa-fw"></i> Reflective XSS
+                <small>Test URL params.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="stored_xss" id="check_xss_stored">
+              <label for="check_xss_stored"><i class="fas fa-file-code fa-fw"></i> Stored XSS (Basic Form Test)
+                <small>Test forms.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="dom_xss" id="check_xss_dom">
+              <label for="check_xss_dom"><i class="fab fa-js-square fa-fw"></i> DOM-based XSS (Basic Test)
+                <small>Test client-side triggers.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="csrf" id="check_csrf">
+              <label for="check_csrf"><i class="fas fa-user-secret fa-fw"></i> CSRF Protection
+                <small>Check POST forms for tokens.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="dir_traversal" id="check_dir_traversal">
+              <label for="check_dir_traversal"><i class="fas fa-folder-open fa-fw"></i> Directory Traversal
+                <small>Test path vulnerabilities.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="open_redirect" id="check_open_redirect">
+              <label for="check_open_redirect"><i class="fas fa-directions fa-fw"></i> Open Redirect
+                <small>Test unsafe URL redirections.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="ssrf" id="check_ssrf">
+              <label for="check_ssrf"><i class="fas fa-network-wired fa-fw"></i> SSRF (Basic Test)
+                <small>Test server-side request forgery.</small>
+              </label>
+            </div>
+            <div class="index-option-item">
+              <input type="checkbox" name="categories" value="cve_check" id="check_cve">
+              <label for="check_cve"><i class="fas fa-virus fa-fw"></i> CVE Vulnerability Check
+                <small>Check for known vulnerabilities in detected software.</small>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- === Brute Force Section === -->
+        <section class="index-scan-options">
+          <h4>Additional Tests</h4>
+          <div class="index-option-item">
+            <input type="checkbox" id="enable_brute_force" name="enable_brute_force" value="true">
+            <label for="enable_brute_force"><i class="fas fa-bolt fa-fw"></i> Enable Basic Brute Force Login Test
+              <small>Attempts login using a predefined password list for the specified username.</small>
+            </label>
+          </div>
+
+          <div id="brute-force-options-simplified" style="display: none;">
+            <div class="index-option-group" id="brute-force-options">
+              <h3><i class="fas fa-cogs fa-fw"></i> Brute Force Settings</h3>
+              <p class="warning-message">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Warning:</strong> <small> Use responsibly and ethically. Only test systems you have explicit permission for.
+                This test will attempt to detect the login form at the specified</small> <strong>Login URL</strong> and use a <strong>predefined password list</strong>.
+              </p>
+              <div class="index-input-group">
+                <label for="login_url"><i class="fas fa-link fa-fw"></i> Login URL</label>
+                <input type="url" id="login_url" name="login_url" placeholder="e.g., https://example.com/login" class="index-input-field" pattern="https?://.+" title="Please enter a valid URL starting with http:// or https://">
+                <small>URL of the login page to test (leave blank to use Target URL).</small>
+              </div>
+              <div class="index-input-group">
+                <label for="login_username"><i class="fas fa-user-circle fa-fw"></i> Username to Test</label>
+                <input type="text" id="login_username" name="login_username" placeholder="e.g., admin, testuser" class="index-input-field">
+                <small>The specific username to target (leave blank to try default or detect automatically).</small>
+              </div>
+              <div class="index-input-group">
+                <label for="max_attempts"><i class="fas fa-list-ol fa-fw"></i> Max Attempts (Password List Limit)</label>
+                <input type="number" id="max_attempts" name="max_attempts" value="20" min="1" max="50" class="index-input-field">
+                <small>Maximum number of passwords to try from the server's predefined list.</small>
+              </div>
+              <div class="index-input-group">
+                <label for="delay"><i class="fas fa-clock fa-fw"></i> Delay Between Attempts (seconds)</label>
+                <input type="number" id="delay" name="delay" value="1" min="0.5" step="0.1" class="index-input-field">
+                <small>Wait time between each password attempt.</small>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- === Advanced Configuration Section === -->
+        <section class="index-scan-options" id="advancedConfigSection">
+          <h4><i class="fas fa-sliders-h fa-fw"></i> Advanced Configuration</h4>
+          <button type="button" class="index-toggle-btn" id="toggleAdvancedConfig">
+            <i class="fas fa-chevron-down"></i> Show Advanced Settings
+          </button>
+
+          <div id="advancedConfigOptions" style="display: none;">
+            <div class="index-option-group">
+              <div class="index-input-group">
+                <label for="scan_depth"><i class="fas fa-layer-group fa-fw"></i> Scan Depth</label>
+                <input type="number" id="scan_depth" name="scan_depth" value="7" min="1" max="15" class="index-input-field">
+                <small>How deep to crawl the target site (1-15). Higher values take longer but find more issues.</small>
+              </div>
+
+              <div class="index-input-group">
+                <label for="threads"><i class="fas fa-microchip fa-fw"></i> Threads</label>
+                <input type="number" id="threads" name="threads" value="11" min="1" max="20" class="index-input-field">
+                <small>Number of concurrent scan threads (1-20). Higher values scan faster but may stress the target.</small>
+              </div>
+
+              <div class="index-input-group">
+                <label for="timeout"><i class="fas fa-stopwatch fa-fw"></i> Request Timeout (seconds)</label>
+                <input type="number" id="timeout" name="timeout" value="30" min="1" max="60" class="index-input-field">
+                <small>Maximum time to wait for responses from the target.</small>
+              </div>
+
+              <div class="index-input-group">
+                <label for="user_agent"><i class="fas fa-user-agent fa-fw"></i> Custom User Agent</label>
+                <input type="text" id="user_agent" name="user_agent" placeholder="e.g., Mozilla/5.0 (compatible; SecurityScannerPro/1.0)" class="index-input-field">
+                <small>Custom User-Agent string for requests (leave blank for default).</small>
+              </div>
+
+              <div class="index-option-item">
+                <input type="checkbox" id="respect_robots" name="respect_robots" value="true" checked>
+                <label for="respect_robots"><i class="fas fa-robot fa-fw"></i> Respect robots.txt
+                  <small>Honor the target site's crawling restrictions (recommended).</small>
+                </label>
+              </div>
+
+              <div class="index-option-item">
+                <input type="checkbox" id="check_dependencies" name="check_dependencies" value="true">
+                <label for="check_dependencies"><i class="fas fa-cubes fa-fw"></i> Check Dependencies
+                  <small>Try to detect and check software dependencies for vulnerabilities.</small>
+                </label>
+              </div>
+
+              <div class="index-input-group" id="dependenciesFileGroup" style="display: none;">
+                <label for="dependencies_file"><i class="fas fa-file-alt fa-fw"></i> Dependencies File Path (Optional)</label>
+                <input type="text" id="dependencies_file" name="dependencies_file" placeholder="e.g., package.json, requirements.txt" class="index-input-field">
+                <small>Path to manually specify a dependencies file (relative to target URL).</small>
+              </div>
+
+              <div class="index-option-item">
+                <input type="checkbox" id="use_nvd" name="use_nvd" value="true" checked>
+                <label for="use_nvd"><i class="fas fa-database fa-fw"></i> Use NVD Database
+                  <small>Query the National Vulnerability Database for CVEs.</small>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- === Submit Button === -->
+        <div class="index-input-group">
+          <button type="submit" class="index-btn" id="launchBtn">
+            <span class="btn-icon"><i class="fas fa-play"></i></span>
+            <span class="btn-text">Launch Security Scan</span>
+          </button>
+        </div>
+
+        <!-- === Error Message Display Area === -->
+        {% if error %}
+          <p class="error-message"><i class="fas fa-exclamation-triangle"></i> {{ error }}</p>
+        {% endif %}
+      </form>
+    </main>
+
+    <footer class="index-footer">
+      <p><small>Note: Use this tool responsibly and only on systems you have explicit permission to test.</small></p>
+    </footer>
+  </div>
+
+  <script>
+  // Global prepareSubmit function accessible from form onsubmit
+  function prepareSubmit() {
+    const launchButton = document.getElementById('launchBtn');
+    const btnText = launchButton.querySelector('.btn-text');
+    const btnIcon = launchButton.querySelector('.btn-icon i');
+    const customScanRadio = document.getElementById('custom_scan');
+    const isCustom = customScanRadio.checked;
+    const checkedCategoriesCount = document.querySelectorAll('#customOptionsBasic input[type="checkbox"]:checked, #advancedOptions input[name="categories"]:checked').length;
+
+    if (isCustom && checkedCategoriesCount === 0) {
+      alert("Please select at least one test category for a custom scan.");
+      return false;
+    }
+
+    const bruteForceCheckbox = document.getElementById('enable_brute_force');
+    if (bruteForceCheckbox?.checked) {
+      const loginUrlInput = document.getElementById('login_url');
+      if (loginUrlInput && loginUrlInput.value.trim() && !loginUrlInput.checkValidity()) {
+        alert('Please enter a valid Login URL starting with http:// or https://.');
+        loginUrlInput.focus();
+        return false;
+      }
+    }
+
+    launchButton.disabled = true;
+    if (btnText) btnText.textContent = 'Scanning...';
+    if (btnIcon) {
+      btnIcon.classList.remove('fa-play');
+      btnIcon.classList.add('fa-spinner', 'fa-spin');
+    }
+    return true;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const customScanRadio = document.getElementById('custom_scan');
+    const fullScanRadio = document.getElementById('full_scan');
+    const customOptionsBasicDiv = document.getElementById('customOptionsBasic');
+    const advancedOptionsDiv = document.getElementById('advancedOptions');
+    const allCustomCheckboxes = document.querySelectorAll('#customOptionsBasic input[type="checkbox"], #advancedOptions input[name="categories"]');
+    const launchButton = document.getElementById('launchBtn');
+    const bruteForceCheckbox = document.getElementById('enable_brute_force');
+    const bruteForceOptionsDiv = document.getElementById('brute-force-options-simplified');
+    const bruteForceInputs = bruteForceOptionsDiv ? bruteForceOptionsDiv.querySelectorAll('input') : [];
+    const toggleAdvancedConfigBtn = document.getElementById('toggleAdvancedConfig');
+    const advancedConfigOptions = document.getElementById('advancedConfigOptions');
+    const checkDependenciesCheckbox = document.getElementById('check_dependencies');
+    const dependenciesFileGroup = document.getElementById('dependenciesFileGroup');
+
+    function toggleCustomSections() {
+      const isCustom = customScanRadio.checked;
+      if (customOptionsBasicDiv) customOptionsBasicDiv.style.display = isCustom ? 'block' : 'none';
+      if (advancedOptionsDiv) advancedOptionsDiv.style.display = isCustom ? 'block' : 'none';
+      updateLaunchButtonState();
+    }
+
+    function toggleBruteForceOptions() {
+      if (!bruteForceCheckbox || !bruteForceOptionsDiv) return;
+      const isEnabled = bruteForceCheckbox.checked;
+      bruteForceOptionsDiv.style.display = isEnabled ? 'block' : 'none';
+      bruteForceInputs.forEach(input => {
+        input.required = false; // No inputs are required
+      });
+    }
+
+    function toggleAdvancedConfig() {
+      if (advancedConfigOptions) {
+        const isVisible = advancedConfigOptions.style.display !== 'none';
+        advancedConfigOptions.style.display = isVisible ? 'none' : 'block';
+
+        // Update button text
+        if (toggleAdvancedConfigBtn) {
+          const icon = toggleAdvancedConfigBtn.querySelector('i');
+          const text = toggleAdvancedConfigBtn.textContent.replace(icon.outerHTML, '').trim();
+
+          if (isVisible) {
+            icon.className = 'fas fa-chevron-down';
+            toggleAdvancedConfigBtn.innerHTML = `<i class="fas fa-chevron-down"></i> Show Advanced Settings`;
+          } else {
+            icon.className = 'fas fa-chevron-up';
+            toggleAdvancedConfigBtn.innerHTML = `<i class="fas fa-chevron-up"></i> Hide Advanced Settings`;
+          }
+        }
+      }
+    }
+
+    function toggleDependenciesFile() {
+      if (!checkDependenciesCheckbox || !dependenciesFileGroup) return;
+      dependenciesFileGroup.style.display = checkDependenciesCheckbox.checked ? 'block' : 'none';
+    }
+
+    function updateLaunchButtonState() {
+      if (!launchButton) return;
+      const isCustom = customScanRadio.checked;
+      const checkedCategoriesCount = document.querySelectorAll('#customOptionsBasic input[type="checkbox"]:checked, #advancedOptions input[name="categories"]:checked').length;
+      launchButton.disabled = isCustom && checkedCategoriesCount === 0;
+    }
+
+    if (customScanRadio) customScanRadio.addEventListener('change', toggleCustomSections);
+    if (fullScanRadio) fullScanRadio.addEventListener('change', toggleCustomSections);
+    allCustomCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updateLaunchButtonState));
+    if (bruteForceCheckbox) bruteForceCheckbox.addEventListener('change', toggleBruteForceOptions);
+    if (toggleAdvancedConfigBtn) toggleAdvancedConfigBtn.addEventListener('click', toggleAdvancedConfig);
+    if (checkDependenciesCheckbox) checkDependenciesCheckbox.addEventListener('change', toggleDependenciesFile);
+
+    toggleCustomSections();
+    toggleBruteForceOptions();
+    updateLaunchButtonState();
+    toggleDependenciesFile();
+  });
+  </script>
+</body>
+</html>
