@@ -1,0 +1,9 @@
+max_requests_per_second: 10
+respect_robots_txt: true
+follow_redirects: true
+max_redirects: 5
+headers:
+  Accept: "application/json"
+cookie_jar:
+  example.com:
+    session: "abc123"
