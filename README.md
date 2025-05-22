@@ -22,4 +22,21 @@ A powerful, modular, and extensible web vulnerability scanner built using Python
 
 ---
 
+---
+
+## ⚙️ Installation
+
+> Make sure you have Python 3.8+ installed.
+
+```bash
+# Clone the repo
+git clone https://github.com/yourusername/ethical-security-scanner.git
+cd ethical-security-scanner
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install Playwright dependencies
+playwright install
+
 
