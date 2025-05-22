@@ -1,0 +1,16 @@
+requests
+urllib3
+dnspython
+python-whois
+pdfkit
+beautifulsoup4
+selenium
+webdriver-manager
+Flask
+cryptography
+PyYAML
+packaging
+playwright
+
+If whois doesn't work, try:
+pip install python-whois
