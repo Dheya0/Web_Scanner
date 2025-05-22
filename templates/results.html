@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan Results - {{ results.get('target', 'Security Scan') }}</title>
+    <!-- Link updated CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    {# Embed results data as JSON safely for JavaScript use #}
+    <script>
+        // FIX: Use the 'results' dictionary directly with the tojson filter
+        const results_data = {{ results | tojson | safe }};
+        // console.log("Results Data:", results_data); // Uncomment for debugging in browser console
+    </script>
+
+    <div class="results-container fade-in">
+        <header class="results-header">
+            <h1 class="title">
+                <i class="fas fa-shield-virus"></i> Scan Results for <span class="highlight">{{ results.get('target', 'Unknown Target') }}</span>
+            </h1>
+            <div class="results-scan-info">
+                <p><i class="fas fa-calendar-alt fa-fw"></i> <strong>Scan Time:</strong>
+                    {{ results.get('scan_time') | jinja2_filter_datetime if results.get('scan_time') else 'N/A' }}
+                </p>
+                <p><i class="fas fa-stopwatch fa-fw"></i> <strong>Duration:</strong>
+                    {% set duration = results.get('scan_stats', {}).get('duration') %}
+                    {{ "%.2f sec"|format(duration) if duration is number else 'N/A' }}
+                </p>
+                <p><i class="fas fa-tasks fa-fw"></i> <strong>Scan Type:</strong> {{ results.get('scan_type', 'N/A') | capitalize }}</p>
+                <p><i class="fas fa-exclamation-triangle fa-fw"></i> <strong>Risk Score:</strong>
+                    {% set score = results.get('risk_score', 0) %}
+                    <span class="results-risk-score {{ 'high' if score > 70 else 'medium' if score > 30 else 'low' if score > 0 else 'none' }}">
+                        {{ score }}
+                    </span>
+                </p>
+                <p><i class="fas fa-bug fa-fw"></i> <strong>Vulns Found:</strong> {{ results.get('vulnerabilities', []) | length }}</p>
+                <p><i class="fas fa-paper-plane fa-fw"></i> <strong>Requests Made:</strong> {{ results.get('scan_stats', {}).get('requests_made', 'N/A') }}</p>
+                <p><i class="fas fa-exclamation-circle fa-fw"></i> <strong>Scan Errors:</strong> {{ results.get('scan_stats', {}).get('errors_encountered', 'N/A') }}</p>
+            </div>
+            {# Display any overall scan error message stored in findings #}
+            {% set scan_error = results.get('findings', {}).get('scan_error') %}
+            {% if scan_error %}
+                <p class="error-message" style="margin-top: 15px;"><i class="fas fa-exclamation-triangle"></i> Scan Error: {{ scan_error }}</p>
+            {% endif %}
+        </header>
+
+        <main>
+            <!-- Summary Visualization -->
+            <section class="results-section summary-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="true" aria-controls="section-summary" tabindex="0">
+                    <i class="fas fa-chart-bar fa-fw"></i> Summary <span class="toggle-icon"><i class="fas fa-minus"></i></span>
+                </h2>
+                <div id="section-summary" class="results-findings active">
+                    {% set vulns = results.get('vulnerabilities', []) %}
+                    {% set counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0, 'Info': 0} %}
+                    {% for v in vulns %}
+                        {% set severity = v.get('severity', 'Info') %}
+                        {% if severity in counts %}
+                            {% set _ = counts.update({severity: counts[severity] + 1}) %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if vulns %}
+                        <div style="position: relative; max-width: 600px; margin: auto; height: 300px;"> {# Set height for canvas container #}
+                            <canvas id="severityChart"></canvas>
+                        </div>
+                        <p style="text-align: center; margin-top: 15px;">
+                            <strong>Total Findings:</strong> {{ vulns | length }}
+                            (Critical: {{ counts.Critical }}, High: {{ counts.High }}, Medium: {{ counts.Medium }}, Low: {{ counts.Low }}, Info: {{ counts.Info }})
+                        </p>
+                    {% else %}
+                        <p class="results-no-data">No vulnerabilities found to summarize.</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <!-- Vulnerabilities Table -->
+            <section class="results-section vulnerabilities-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-vulnerabilities" tabindex="0">
+                    <i class="fas fa-bug fa-fw"></i> Detailed Vulnerabilities & Findings <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-vulnerabilities" class="results-findings">
+                    {% set vulns = results.get('vulnerabilities', []) %}
+                    {% if vulns %}
+                        <div class="scrollable-table-wrapper">
+                            <table class="results-table vulnerability-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" style="width: 18%;">Name</th>
+                                        <th scope="col" style="width: 8%;">Severity</th>
+                                        <th scope="col" style="width: 39%;">Description & Details</th>
+                                        <th scope="col" style="width: 10%;">CWE</th>
+                                        <th scope="col" style="width: 25%;">Remediation</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {# FIX: Simplified sort to avoid syntax error. Sorting by score in Python is better. #}
+                                    {% for vuln in vulns | sort(attribute='severity', reverse=True, case_sensitive=False) %}
+                                        <tr>
+                                            <td>{{ vuln.get('name', 'N/A') }}</td>
+                                            <td class="results-severity-{{ vuln.get('severity', 'info') | lower }}">{{ vuln.get('severity', 'Info') }}</td>
+                                            <td>
+                                                {{ vuln.get('description', 'No description available.') }}
+                                                {# Display details if they exist and are a non-empty dictionary #}
+                                                {% set details = vuln.get('details') %}
+                                                {% if details is mapping and details %}
+                                                    <ul style="font-size: 0.9em; margin-top: 8px; padding-left: 15px; color: var(--text-color-secondary); list-style: disc;">
+                                                        {% for key, value in details.items() %}
+                                                            <li><strong>{{ key | replace('_', ' ') | title }}:</strong>
+                                                                {# Check if value might be code/html-like before escaping #}
+                                                                {% if value is string and ('<' in value or '>' in value or '{' in value or '}' in value) %}
+                                                                     <code style="word-break: break-all;">{{ value | escape }}</code>
+                                                                {% else %}
+                                                                     {{ value }}
+                                                                {% endif %}
+                                                             </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% set cwe = vuln.get('cwe') %}
+                                                {% if cwe and cwe is string and cwe.startswith('CWE-') %}
+                                                    {# Attempt to extract number, handle potential errors #}
+                                                    {% set cwe_num = cwe.split('-')[1] %}
+                                                    {% if cwe_num and cwe_num.isdigit() %}
+                                                        <a href="https://cwe.mitre.org/data/definitions/{{ cwe_num }}.html" target="_blank" rel="noopener noreferrer">{{ cwe }}</a>
+                                                    {% else %}
+                                                        {{ cwe }} {# Display as text if format is unexpected #}
+                                                    {% endif %}
+                                                {% elif cwe %}
+                                                    {{ cwe }}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ vuln.get('remediation', 'Review security best practices.') }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="results-no-data">No vulnerabilities detected or reported in this scan.</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <!-- Domain Information -->
+            {% set domain_info = results.get('findings', {}).get('domain_info') %}
+            {% if domain_info %} {# Only render section if domain_info exists #}
+            <section class="results-section domain-info-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-domain-info" tabindex="0">
+                    <i class="fas fa-info-circle fa-fw"></i> Domain & DNS Information
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-domain-info" class="results-findings">
+                        {% if domain_info and not domain_info.get('error') %}
+                            <h4>WHOIS Information</h4>
+                            {% set whois_data = domain_info.get('whois', {}) %}
+                            {% if whois_data and not whois_data.get('error') %}
+                                <dl class="results-dl">
+                                    {# Iterate through keys present in the data #}
+                                    {% for key in ['registrar', 'creation_date', 'expiration_date', 'updated_date', 'name_servers', 'status', 'emails', 'dnssec', 'registrant', 'registrant_country'] %}
+                                        {% set value = whois_data.get(key) %}
+                                        {% if value is not none %}
+                                            <dt>{{ key | replace('_', ' ') | title }}</dt>
+                                            {# Handle list values (like name_servers, emails, status) #}
+                                            <dd>
+                                                {% if value is sequence and value is not string %}
+                                                    <ul>{% for item in value %}<li>{{ item }}</li>{% endfor %}</ul>
+                                                {% else %}
+                                                    {{ value }}
+                                                {% endif %}
+                                            </dd>
+                                        {% endif %}
+                                    {% endfor %}
+                                </dl>
+                            {% elif whois_data.get('error') %}
+                                <p class="error-details">WHOIS Error: {{ whois_data.error }}</p>
+                            {% else %}
+                                <p class="results-no-data">No WHOIS data found.</p>
+                            {% endif %}
+
+                            <hr class="section-divider"> {# Use class for divider #}
+                            <h4>DNS Records</h4>
+                            {% set dns_records = domain_info.get('dns', {}) %}
+                            {% if dns_records and not dns_records.get('error') %}
+                                <dl class="results-dl">
+                                    {# Iterate through record types found in the data #}
+                                    {% for type, records in dns_records.items() if type != 'error' %}
+                                        <dt>{{ type }} Records</dt>
+                                        {% if records is sequence %}
+                                            {% if records %}
+                                                <dd><ul>{% for record in records %}<li><code>{{ record | e }}</code></li>{% endfor %}</ul></dd>
+                                            {% else %}
+                                                <dd><span class="status-missing">None Found</span></dd>
+                                            {% endif %}
+                                        {% elif records is mapping and records.get('error') %}
+                                             <dd><span class="error-details">{{ records.error }}</span></dd>
+                                        {% else %}
+                                             <dd><span class="status-unknown">N/A</span></dd>
+                                        {% endif %}
+                                    {% endfor %}
+                                </dl>
+                            {% elif dns_records.get('error') %}
+                                <p class="error-details">DNS Query Error: {{ dns_records.error }}</p>
+                            {% else %}
+                                <p class="results-no-data">No DNS records found or check failed.</p>
+                            {% endif %}
+
+                            {% set risk_notes = domain_info.get('risk_notes', []) %}
+                            {% if risk_notes %}
+                            <hr class="section-divider">
+                            <h4>Domain Risk Notes</h4>
+                            <ul class="recommendations-list"> {# Reuse list style #}
+                                {% for note in risk_notes %}
+                                    <li class="results-severity-low">{{ note }}</li> {# Style as low severity recommendation #}
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+
+                        {% elif domain_info and domain_info.get('error') %}
+                            <p class="error-details">Error retrieving Domain Information: {{ domain_info.error }}</p>
+                        {% else %}
+                            <p class="results-no-data">Domain information check did not yield data.</p>
+                        {% endif %}
+                </div>
+            </section>
+            {% endif %} {# End check if domain_info exists #}
+
+            <!-- Brute Force Results -->
+            {% set brute_force_info = results.get('findings', {}).get('brute_force') %}
+            {% if brute_force_info %} {# Only render if brute_force data exists #}
+            <section class="results-section brute-force-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-brute-force" tabindex="0">
+                    <i class="fas fa-bolt fa-fw"></i> Brute Force Login Test Results
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-brute-force" class="results-findings">
+                        {% if brute_force_info.get('status') == 'skipped' or brute_force_info.get('status') == 'pending' %}
+                            <p class="results-no-data">{{ brute_force_info.get('message', 'Brute force test was not run or did not complete.') }}</p>
+                        {% elif brute_force_info.get('error') %}
+                            <p class="error-details">Error during Brute Force test: {{ brute_force_info.error }}</p>
+                            {% set params = brute_force_info.get('parameters', {}) %}
+                            <dl class="results-dl">
+                                {% if params.get('login_url') %}<dt>Login URL</dt><dd>{{ params.login_url }}</dd>{% endif %}
+                                {% if params.get('login_username') %}<dt>Username Tested</dt><dd>{{ params.login_username }}</dd>{% endif %}
+                            </dl>
+                        {% elif brute_force_info.get('status') == 'success' %}
+                            <p class="status-insecure"><i class="fas fa-check-circle"></i> {{ brute_force_info.get('message', 'Success: Password Found!') }}</p>
+                             {% set params = brute_force_info.get('parameters', {}) %}
+                            <dl class="results-dl">
+                                <dt>Login URL</dt><dd>{{ params.get('login_url', 'N/A') }}</dd>
+                                <dt>Username Tested</dt><dd>{{ brute_force_info.get('tested_username', 'N/A') }}</dd>
+                                <dt>Password Found</dt><dd><code class="password-found">*** HIDDEN ***</code> (Check application logs)</dd>
+                                <dt>Attempts Made</dt><dd>{{ brute_force_info.get('attempts_made', 'N/A') }} / {{ params.get('max_attempts', 'N/A') }}</dd>
+                            </dl>
+                        {% elif brute_force_info.get('status') == 'failure' %}
+                            <p class="status-secure"><i class="fas fa-times-circle"></i> {{ brute_force_info.get('message', 'Failure: No password found within limits.') }}</p>
+                             {% set params = brute_force_info.get('parameters', {}) %}
+                            <dl class="results-dl">
+                                <dt>Login URL</dt><dd>{{ params.get('login_url', 'N/A') }}</dd>
+                                <dt>Username Tested</dt><dd>{{ brute_force_info.get('tested_username', 'N/A') }}</dd>
+                                <dt>Attempts Made</dt><dd>{{ brute_force_info.get('attempts_made', 'N/A') }} / {{ params.get('max_attempts', 'N/A') }}</dd>
+                            </dl>
+                        {% else %}
+                            <p class="status-unknown">Brute force test status unknown or data incomplete.</p>
+                        {% endif %}
+                </div>
+            </section>
+            {% endif %} {# End check if brute_force_info exists #}
+
+            <!-- HTTPS Check -->
+            {% set https_info = results.get('findings', {}).get('https') %}
+            {% set ssl_protocols = results.get('findings', {}).get('ssl_protocols') %}
+            {% if https_info %} {# Only render if https data exists #}
+            <section class="results-section https-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-https" tabindex="0">
+                    <i class="fas fa-lock fa-fw"></i> HTTPS & Certificate Details
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-https" class="results-findings">
+                        {% if https_info and not https_info.get('error') %}
+                            <dl class="results-dl">
+                                <dt>HTTPS Supported</dt><dd class="{{ 'status-secure' if https_info.get('https_supported') else 'status-insecure' }}">{{ https_info.get('https_supported', 'Unknown') }}</dd>
+                                <dt>Certificate Valid</dt><dd class="{{ 'status-secure' if https_info.get('certificate_valid') else 'status-insecure' }}">{{ https_info.get('certificate_valid', 'Unknown') }}</dd>
+                                <dt>Certificate Issuer</dt><dd>{{ https_info.get('certificate_issuer', 'N/A') }}</dd>
+                                <dt>Certificate Subject</dt><dd>{{ https_info.get('certificate_subject', 'N/A') }}</dd>
+                                <dt>Certificate Expiry</dt><dd>{{ https_info.get('certificate_expiry') | jinja2_filter_datetime if https_info.get('certificate_expiry') else 'N/A' }}</dd>
+                                <dt>Days to Expiry</dt><dd>{{ https_info.get('days_to_expiry', 'N/A') }}</dd>
+                                <dt>Certificate Expired</dt><dd class="{{ 'status-insecure' if https_info.get('certificate_expired') else 'status-secure' }}">{{ https_info.get('certificate_expired', 'N/A') }}</dd>
+                                <dt>Not Yet Valid</dt><dd class="{{ 'status-insecure' if https_info.get('certificate_not_yet_valid') else 'status-secure' }}">{{ https_info.get('certificate_not_yet_valid', 'N/A') }}</dd>
+                                <dt>Signature Algorithm</dt><dd>{{ https_info.get('certificate_algorithm', 'N/A') }}</dd>
+                                <dt>TLS Version</dt><dd>{{ https_info.get('tls_version', 'N/A') }}</dd>
+                                <dt>Cipher Suite</dt><dd>{{ https_info.get('cipher_suite', 'N/A') }}</dd>
+                                <dt>HSTS Enabled</dt><dd class="{{ 'status-secure' if https_info.get('hsts_enabled') else 'status-insecure' }}">{{ https_info.get('hsts_enabled', 'N/A') }}</dd>
+                                {% if https_info.get('hsts_header') %}<dt>HSTS Header</dt><dd><code>{{ https_info.hsts_header }}</code></dd>{% endif %}
+                                <dt>HTTP Redirect</dt><dd class="{{ 'status-secure' if https_info.get('http_to_https_redirect') else 'status-insecure' if https_info.get('http_to_https_redirect') is false else 'status-unknown' }}">{{ https_info.get('http_to_https_redirect', 'N/A') }}</dd>
+                            </dl>
+                             {# Display SSL Protocols if available #}
+                             {% if ssl_protocols %}
+                                 <hr class="section-divider">
+                                 <h4>SSL/TLS Protocol Support</h4>
+                                 <dl class="results-dl">
+                                    {% for proto, supported in ssl_protocols.items() %}
+                                        <dt>{{ proto }}</dt>
+                                        {# Add classes based on support status for styling #}
+                                        <dd class="{{ 'status-secure' if supported == False else 'status-insecure' if supported == True else 'status-unknown' }}">
+                                           {{ 'Supported' if supported == True else 'Not Supported' if supported == False else supported | title }}
+                                        </dd>
+                                    {% endfor %}
+                                 </dl>
+                             {% endif %}
+                        {% elif https_info and https_info.get('error') %}
+                            <p class="error-details">Error during HTTPS check: {{ https_info.error }}</p>
+                        {% else %}
+                            <p class="results-no-data">HTTPS check did not yield data.</p>
+                        {% endif %}
+                </div>
+            </section>
+            {% endif %} {# End check if https_info exists #}
+
+            <!-- Security Headers -->
+            {% set headers_info = results.get('findings', {}).get('security_headers') %}
+            {% if headers_info %} {# Only render if headers data exists #}
+            <section class="results-section headers-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-headers" tabindex="0">
+                    <i class="fas fa-shield-alt fa-fw"></i> Security Headers Analysis
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-headers" class="results-findings">
+                        {% if headers_info and headers_info.get('headers') %}
+                             {% set score_info = headers_info.get('score', {}) %}
+                            <p><strong>Security Score: {{ score_info.get('value', 'N/A') }}%</strong> {{ ('(' + score_info.get('description', '') + ')') if score_info.get('description') else '' }}</p>
+                            <div class="scrollable-table-wrapper">
+                                <table class="results-table headers-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Header</th>
+                                            <th scope="col">Present</th>
+                                            <th scope="col">Value / Status</th>
+                                            <th scope="col">Recommendation</th>
+                                            <th scope="col">Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for header, info in headers_info.get('headers', {}).items() %}
+                                            <tr>
+                                                <td>{{ header }}</td>
+                                                <td><span class="{{ 'status-secure' if info.get('present') else 'status-missing' }}">{{ 'Yes' if info.get('present') else 'No' }}</span></td>
+                                                <td>
+                                                    {% if info.get('present') %}
+                                                        <code style="word-break: break-all;">{{ info.get('value', '') | e }}</code><br>
+                                                        <span class="{{ 'status-secure' if info.get('is_secure') else 'status-insecure' }}">
+                                                            ({{ 'Secure' if info.get('is_secure') else 'Insecure/Weak' }})
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="status-missing">Missing</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td><code>{{ info.get('recommendation', 'N/A') }}</code></td>
+                                                <td>{{ info.get('description', 'N/A') }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% elif headers_info and headers_info.get('error') %}
+                            <p class="error-details">Error during Security Headers check: {{ headers_info.error }}</p>
+                        {% else %}
+                            <p class="results-no-data">Security Headers check did not yield data.</p>
+                        {% endif %}
+                </div>
+            </section>
+            {% endif %} {# End check if headers_info exists #}
+
+            <!-- Cookies -->
+            {% set cookies_info = results.get('findings', {}).get('cookies') %}
+            {% if cookies_info %} {# Only render if cookies data exists #}
+            <section class="results-section cookies-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-cookies" tabindex="0">
+                    <i class="fas fa-cookie-bite fa-fw"></i> Cookies Analysis
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-cookies" class="results-findings">
+                        {% if cookies_info and cookies_info.get('cookies') %}
+                            {% set stats = cookies_info.get('stats', {}) %}
+                            <p><strong>Stats:</strong> Total: {{ stats.get('total', 0) }} | Secure: {{ stats.get('secure', 0) }} | HttpOnly: {{ stats.get('http_only', 0) }} | SameSite Lax: {{ stats.get('lax', 0) }} | SameSite Strict: {{ stats.get('strict', 0) }} | SameSite None: {{ stats.get('none', 0) }}</p>
+                            <div class="scrollable-table-wrapper">
+                                <table class="results-table cookies-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Name</th>
+                                            <th scope="col">Domain</th>
+                                            <th scope="col">Secure Flag</th>
+                                            <th scope="col">HttpOnly Flag</th>
+                                            <th scope="col">SameSite Flag</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for cookie in cookies_info.get('cookies', []) %}
+                                            <tr>
+                                                <td>{{ cookie.get('name', 'N/A') }}</td>
+                                                <td>{{ cookie.get('domain', 'N/A') }}</td>
+                                                <td class="{{ 'status-secure' if cookie.get('secure') else 'status-insecure' }}">{{ cookie.get('secure', False) }}</td>
+                                                <td class="{{ 'status-secure' if cookie.get('http_only') else 'status-insecure' }}">{{ cookie.get('http_only', False) }}</td>
+                                                <td>{{ cookie.get('same_site', 'Not Set') or 'Not Set' }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% elif cookies_info and cookies_info.get('message') %}
+                            <p class="results-no-data">{{ cookies_info.message }}</p>
+                        {% elif cookies_info and cookies_info.get('error') %}
+                            <p class="error-details">Error during Cookies check: {{ cookies_info.error }}</p>
+                        {% else %}
+                            <p class="results-no-data">Cookies check did not yield data.</p>
+                        {% endif %}
+                </div>
+            </section>
+            {% endif %} {# End check if cookies_info exists #}
+
+            <!-- Information Disclosure -->
+            {% set info_disclosure_info = results.get('findings', {}).get('info_disclosure') %}
+             {% if info_disclosure_info %} {# Only render if info_disclosure data exists #}
+           <section class="results-section info-disclosure-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-info-disclosure" tabindex="0">
+                    <i class="fas fa-eye fa-fw"></i> Information Disclosure Analysis
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-info-disclosure" class="results-findings">
+                        {% set info = info_disclosure_info %}
+                        {% if info and not info.get('error') %}
+                            {% set server_info = info.get('server_info', {}) %}
+                            {% if server_info %}
+                                <h4>Server Information</h4>
+                                <dl class="results-dl">
+                                    {% for key, value in server_info.items() %}
+                                        <dt>{{ key | replace('_', ' ') | title }}</dt>
+                                        <dd><code>{{ value | e }}</code></dd>
+                                    {% endfor %}
+                                </dl>
+                            {% endif %}
+                             {% set tech_stack = info.get('tech_stack', []) %}
+                             {% if tech_stack %}
+                                <h4>Detected Technologies</h4>
+                                <ul>{% for tech in tech_stack %}<li>{{ tech }}</li>{% endfor %}</ul>
+                            {% endif %}
+                            {% set comments = info.get('comments', []) %}
+                            {% if comments %}
+                                <h4>Sensitive Comments Found</h4>
+                                <ul class="code-list"> {# Class for styling list of codes #}
+                                    {% for comment in comments %}
+                                        <li><code>{{ comment | e }}</code></li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                            {% set files = info.get('sensitive_files', []) %}
+                            {% if files %}
+                                <h4>Accessible Sensitive Paths</h4>
+                                <ul>
+                                    {% for file in files %}
+                                        <li>{{ file.get('path', 'N/A') }} (Status: {{ file.get('status', 'N/A') }}){% if file.get('url') %} - <a href="{{ file.get('url') }}" target="_blank" rel="noopener noreferrer">Link</a>{% endif %}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                             {% if not server_info and not tech_stack and not comments and not files %}
+                                <p class="results-no-data">No significant information disclosure issues detected.</p>
+                            {% endif %}
+                        {% elif info and info.get('error') %}
+                            <p class="error-details">Error during Information Disclosure check: {{ info.error }}</p>
+                        {% else %}
+                            <p class="results-no-data">Information Disclosure check did not yield data.</p>
+                        {% endif %}
+                </div>
+            </section>
+             {% endif %} {# End check if info_disclosure_info exists #}
+
+            <!-- WAF Detection -->
+            {% set waf_info = results.get('findings', {}).get('waf_presence') %}
+             {% if waf_info %} {# Only render if waf_info exists #}
+            <section class="results-section waf-section">
+                <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="false" aria-controls="section-waf" tabindex="0">
+                    <i class="fas fa-fire-alt fa-fw"></i> Web Application Firewall (WAF) Detection
+                    <span class="toggle-icon"><i class="fas fa-plus"></i></span>
+                </h2>
+                <div id="section-waf" class="results-findings">
+                        {% if waf_info and not waf_info.get('error') %}
+                            <dl class="results-dl">
+                                <dt>WAF Detected</dt><dd class="{{ 'status-insecure' if waf_info.get('detected') else 'status-secure' }}">{{ 'Yes' if waf_info.get('detected') else 'No / Unclear' }}</dd>
+                                {% if waf_info.get('detected') %}
+                                    <dt>WAF Name</dt><dd>{{ waf_info.get('waf_name', 'Unknown') }}</dd>
+                                    <dt>Detection Method</dt><dd>{{ waf_info.get('detection_method', 'N/A') }}</dd>
+                                    <dt>Confidence</dt><dd>{{ waf_info.get('confidence', 'N/A') }}</dd>
+                                {% endif %}
+                            </dl>
+                        {% elif waf_info and waf_info.get('error') %}
+                            <p class="error-details">Error during WAF Detection: {{ waf_info.error }}</p>
+                        {% else %}
+                            <p class="results-no-data">WAF detection ran but yielded no specific data.</p>
+                        {% endif %}
+                </div>
+            </section>
+            {% endif %} {# End check if waf_info exists #}
+
+
+            <!-- Recommendations -->
+          <section class="results-section recommendations-section">
+    <h2 class="results-section-title" onclick="toggleSection(this)" aria-expanded="true" aria-controls="section-recommendations" tabindex="0">
+        <i class="fas fa-tasks fa-fw"></i> Recommended Actions
+        <span class="toggle-icon"><i class="fas fa-minus"></i></span>
+    </h2>
+    <div id="section-recommendations" class="results-findings active">
+        {% set vulns = results.get('vulnerabilities', []) %}
+        {% if vulns %}
+            <ul class="recommendations-list">
+                {% for vuln in vulns %}
+                    <li class="results-severity-{{ vuln.get('severity', 'info') | lower }}">
+                        <strong>{{ vuln.get('name') }}:</strong> {{ vuln.get('remediation', 'Review security best practices.') }}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="results-no-data">No specific recommendations available based on scan results.</p>
+        {% endif %}
+    </div>
+</section>
+
+            <!-- Action Buttons -->
+            <div class="results-actions" style="margin-top: 30px; text-align: center;">
+                {# Simple POST form for PDF download - relies on session data #}
+                <form method="POST" action="{{ url_for('download_pdf_route') }}" style="display: inline-block; margin-right: 15px;">
+                    <button type="submit" class="results-btn download-btn">
+                        <i class="fas fa-file-pdf"></i> Download PDF Report
+                    </button>
+                </form>
+
+                <a href="{{ url_for('index_route') }}" class="results-btn" style="background: var(--bg-color-light);">
+                    <i class="fas fa-arrow-left"></i> Run New Scan
+                </a>
+            </div>
+
+        </main>
+
+        <footer class="results-footer">
+            <p>Report generated by Ethical Security Scanner</p>
+            <p class="timestamp">Generated on: {{ results.get('scan_time') | jinja2_filter_datetime if results.get('scan_time') else '[Date not available]' }}</p>
+        </footer>
+    </div>
+
+    <script>
+        // Toggle section visibility function
+        function toggleSection(element) {
+            if (!element) return;
+            const controlsId = element.getAttribute('aria-controls');
+            const controlsElement = document.getElementById(controlsId);
+            if (!controlsElement) return;
+
+            const isExpanded = element.getAttribute('aria-expanded') === 'true';
+            const toggleIcon = element.querySelector('.toggle-icon i');
+
+            element.setAttribute('aria-expanded', !isExpanded);
+            controlsElement.classList.toggle('active', !isExpanded);
+
+            if (toggleIcon) {
+                toggleIcon.classList.remove('fa-minus', 'fa-plus');
+                toggleIcon.classList.add(!isExpanded ? 'fa-minus' : 'fa-plus');
+            }
+        }
+
+        // Initialize charts and sections on DOM load
+         document.addEventListener('DOMContentLoaded', function() {
+
+            // --- Severity distribution chart ---
+            const severityChartCanvas = document.getElementById('severityChart');
+            // FIX: Use results_data (the JS object)
+            const vulnerabilities = results_data?.vulnerabilities;
+
+            if (severityChartCanvas && vulnerabilities && Array.isArray(vulnerabilities) && vulnerabilities.length > 0) {
+                try {
+                    const ctx = severityChartCanvas.getContext('2d');
+                    const counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0, 'Info': 0};
+                    vulnerabilities.forEach(v => {
+                        const severity = v?.severity || 'Info';
+                        if (severity in counts) {
+                            counts[severity]++;
+                        }
+                    });
+
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
+                            datasets: [{
+                                label: 'Findings by Severity',
+                                data: [counts.Critical, counts.High, counts.Medium, counts.Low, counts.Info],
+                                backgroundColor: [
+                                    'rgba(220, 53, 69, 0.7)',  // Danger (Critical)
+                                    'rgba(253, 126, 20, 0.7)', // Orange (High)
+                                    'rgba(255, 193, 7, 0.7)',  // Warning (Medium)
+                                    'rgba(13, 110, 253, 0.7)', // Primary (Low)
+                                    'rgba(108, 117, 125, 0.7)' // Secondary (Info)
+                                ],
+                                borderColor: [
+                                     '#dc3545', '#fd7e14', '#ffc107', '#0d6efd', '#6c757d'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y', // Horizontal bar chart
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { beginAtZero: true, ticks: { precision: 0, color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                                y: { grid: { display: false }, ticks: { color: '#e8e8e8' } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                title: { display: true, text: 'Vulnerability Severity Distribution', color: '#e8e8e8', font: { size: 16 } }
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Error creating severity chart:", e);
+                    const summaryDiv = document.getElementById('section-summary');
+                     if (summaryDiv) {
+                         summaryDiv.innerHTML += '<p class="error-details">Error displaying severity chart.</p>';
+                     }
+                }
+            } else if (severityChartCanvas) {
+                 // If canvas exists but no data, replace it with a message
+                 const summaryDiv = document.getElementById('section-summary');
+                 if (summaryDiv && !summaryDiv.querySelector('.results-no-data')) {
+                      const noDataP = document.createElement('p');
+                      noDataP.className = 'results-no-data';
+                      noDataP.textContent = 'No vulnerability data to display chart.';
+                      // Replace the canvas parent div if it exists, otherwise the canvas itself
+                      const canvasContainer = severityChartCanvas.parentElement;
+                      if (canvasContainer && canvasContainer.contains(severityChartCanvas)) {
+                        canvasContainer.replaceChild(noDataP, severityChartCanvas);
+                      }
+                 }
+            }
+
+            // Set initial state for collapsible sections
+             document.querySelectorAll('.results-section').forEach(section => {
+                const title = section.querySelector('.results-section-title');
+                const content = section.querySelector('.results-findings');
+                // Start with Summary and Recommendations open
+                const startOpen = section.classList.contains('summary-section') || section.classList.contains('recommendations-section');
+                const isExpanded = startOpen; // Directly use startOpen for initial state
+
+                if(title && content){
+                    title.setAttribute('aria-expanded', isExpanded);
+                    content.classList.toggle('active', isExpanded);
+                    const toggleIcon = title.querySelector('.toggle-icon i');
+                    if(toggleIcon){
+                        toggleIcon.classList.remove('fa-minus', 'fa-plus');
+                        toggleIcon.classList.add(isExpanded ? 'fa-minus' : 'fa-plus');
+                    }
+                }
+            });
+        });
+    </script>
+
+     {# Add a simple divider style for use between subsections #}
+     <style>
+        hr.section-divider {
+            border: none;
+            height: 1px;
+            background-color: var(--border-color);
+            margin: calc(var(--spacing-unit) * 2.5) 0; /* 20px */
+        }
+        ul.code-list li {
+            margin-bottom: var(--spacing-unit);
+        }
+     </style>
+</body>
+</html>

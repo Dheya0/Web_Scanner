@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تقرير الفحص الأمني</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            direction: rtl;
+            text-align: right;
+            padding: 40px;
+            background-color: #f9f9f9;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        header img {
+            height: 60px;
+            margin-left: 20px;
+        }
+
+        h1, h2 {
+            color: #0d6efd;
+        }
+
+        .section {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+
+        .section p strong {
+            display: inline-block;
+            width: 150px;
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table th, table td {
+            padding: 12px 10px;
+            border: 1px solid #e0e0e0;
+            text-align: right;
+        }
+
+        table th {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+
+        .high-risk {
+            background-color: #f8d7da;
+        }
+
+        .medium-risk {
+            background-color: #fff3cd;
+        }
+
+        .low-risk {
+            background-color: #d1e7dd;
+        }
+
+        .no-vulns {
+            color: #198754;
+            font-weight: bold;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
+        <h1>تقرير الفحص الأمني</h1>
+    </header>
+
+    <div class="section">
+        <p><strong>العنوان المستهدف:</strong> {{ results.target }}</p>
+        <p><strong>نوع الفحص:</strong> {{ results.scan_type }}</p>
+        <p><strong>تاريخ الفحص:</strong> {{ results.scan_time }}</p>
+    </div>
+
+    <div class="section">
+        <h2>الثغرات المكتشفة</h2>
+        {% if results.vulnerabilities %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>اسم الثغرة</th>
+                        <th>الوصف</th>
+                        <th>درجة الخطورة</th>
+                        <th>التوصيات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vuln in results.vulnerabilities %}
+                    <tr class="{{ 'high-risk' if vuln.severity == 'High' else 'medium-risk' if vuln.severity == 'Medium' else 'low-risk' }}">
+                        <td>⚠️ {{ vuln.name }}</td>
+                        <td>{{ vuln.description }}</td>
+                        <td>{{ vuln.severity }}</td>
+                        <td>{{ vuln.recommendation }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="no-vulns">✅ لم يتم اكتشاف ثغرات خطيرة.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <h2>درجة الخطورة الإجمالية</h2>
+        <p><strong>الدرجة:</strong> {{ results.risk_score }} / 100</p>
+    </div>
+
+    <div class="section">
+        <h2>ملخص التوصيات</h2>
+        <ul>
+            {% for tip in results.recommendations %}
+                <li>🔧 {{ tip }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <footer>
+        هذا التقرير تم إنشاؤه باستخدام أداة الفحص الأمني الذكي © 2025
+    </footer>
+
+</body>
+</html>
