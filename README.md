@@ -22,5 +22,4 @@ A powerful, modular, and extensible web vulnerability scanner built using Python
 
 ---
 
-## 📁 Project Structure
 
